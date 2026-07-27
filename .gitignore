@@ -1,0 +1,42 @@
+# ==========================================
+# 1. SSH / Security Keys & Certificates
+# ==========================================
+id_*
+*_ed25519
+*.pem
+*.key
+*.pfx
+*.p12
+vps-key
+
+# ==========================================
+# 2. Environment variables & Secrets
+# ==========================================
+.env
+.env.*
+!.env.example
+
+# ==========================================
+# 3. Application configurations with secrets
+# ==========================================
+app.ini
+config.ini
+secrets.yml
+!app.ini.example
+
+# ==========================================
+# 4. Database dumps, Backups & Logs
+# ==========================================
+*.sql
+*.dump
+*.sqlite3
+*.log
+*.tar.gz
+*.zip
+
+# ==========================================
+# 5. OS & Editor System Artifacts
+# ==========================================
+.DS_Store
+.vscode/
+.idea/
