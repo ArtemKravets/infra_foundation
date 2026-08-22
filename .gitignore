@@ -4,6 +4,7 @@
 id_*
 *_ed25519
 *.pem
+*.pub
 *.key
 *.pfx
 *.p12
@@ -22,7 +23,11 @@ vps-key
 app.ini
 config.ini
 secrets.yml
-!app.ini.example
+!configs/gitea/app.ini.example
+
+# Ignore pre-render cloud-init configuration (to prevent secret leaks)
+configs/cloud-init/user-data
+*.rendered
 
 # ==========================================
 # 4. Database dumps, Backups & Logs
@@ -35,7 +40,14 @@ secrets.yml
 *.zip
 
 # ==========================================
-# 5. OS & Editor System Artifacts
+# 5. Images
+# ==========================================
+*.iso
+*.img
+*.qcow2
+
+# ==========================================
+# 6. OS & Editor System Artifacts
 # ==========================================
 .DS_Store
 .vscode/
