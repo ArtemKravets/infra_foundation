@@ -1,0 +1,18 @@
+<pool type='dir'>
+  <name>vmpool</name>
+  <uuid>4703d99b-51cc-4588-858a-c1124ff3c0b3</uuid>
+  <capacity unit='bytes'>315926315008</capacity>
+  <allocation unit='bytes'>28672</allocation>
+  <available unit='bytes'>315926286336</available>
+  <source>
+  </source>
+  <target>
+    <path>/var/lib/libvirt/vmpool</path>
+    <permissions>
+      <mode>0755</mode>
+      <owner>0</owner>
+      <group>0</group>
+    </permissions>
+  </target>
+</pool>
+
