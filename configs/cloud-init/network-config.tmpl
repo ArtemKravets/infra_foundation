@@ -1,0 +1,27 @@
+# The template is configured for labnet 10.10.10.0/24
+
+version: 2
+# Configure settings for wired network interfaces
+ethernets:
+    # Assign a name to the interface and associate it with the actual name 
+    # of the network card using the `match` keyword
+    default_net:
+        match:
+            # We are looking for any network interface whose name begins with “en”
+            name: en*
+        # Disable DHCP address assignment
+        dhcp4: false
+        # envsubst passes a static IP address
+        addresses:
+            - ${VM_IP}/24
+        # Set the default gateway
+        routes:
+            - to: default
+              via: 10.10.10.1
+        # Determine the DNS server address
+        nameservers:
+            addresses:
+                - ${VM_DNS}
+            # Specify the search domain
+            search:
+                - lab.internal

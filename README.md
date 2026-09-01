@@ -56,7 +56,7 @@ flowchart TD
 ```
 
 **Сетевая топология:**
-Поднята изолированная виртуальная внутренняя сеть `10.10.10.0/24` на libvirt с настроенным NAT для выхода узлов в интернет. Раздача адресов пока динамическая, из DHCP-пула; закрепление адресов за узлами — следующий шаг. Полная карта адресации описана в [`docs/addressing.md`](docs/addressing.md).
+Поднята изолированная виртуальная внутренняя сеть `10.10.10.0/24` на libvirt с настроенным NAT для выхода узлов в интернет. За каждым узлом закрепляется его статический адрес. Полная карта адресации описана в [`docs/addressing.md`](docs/addressing.md).
 
 **Автоматизация (Golden Image):**
 Узлы парка не устанавливаются вручную. Подготовлен обезличенный «золотой шаблон» на базе Ubuntu 24.04. Новые ВМ клонируются из него, а базовая конфигурация (пользователи, ключи) инжектится через **cloud-init**.
@@ -94,7 +94,7 @@ cd infra_foundation
 
 ```bash
 # Устанавливаем пакеты
-sudo apt install -y qemu-kvm libvirt-daemon-system libvirt-clients virtinst bridge-utils
+sudo apt install -y qemu-kvm libvirt-daemon-system libvirt-clients virtinst bridge-utils iputils-arping
 
 # Даём своему пользователю доступ к KVM/libvirt без sudo
 sudo usermod -aG libvirt,kvm $USER
@@ -269,7 +269,7 @@ qemu-img info noble-server-cloudimg-amd64.img
 
 #### 5.2 Подготовка для cloud-init
 
-Cloud-образ при первой загрузке ищет `datasource` — источник данных о том, как себя настроить. Наш источник данных — ISO-образ из двух файлов: `user-data` (как конфигурируем ОС: пользователи, права, SSH-ключи, правила обновления пакетов) и `meta-data` (идентификация узла: instance-id, hostname). Собираем эти файлы в ISO утилитой `cloud-localds` и подключаем к ВМ вторым диском. `user-data` лежит в репозитории по пути [`configs/cloud-init/user-data.tmpl`](configs/cloud-init/user-data.tmpl) в виде шаблона, который ожидает подстановки публичного SSH-ключа для доступа к ВМ. Из пакетов в `user-data` указан `qemu-guest-agent` — канал взаимодействия между гипервизором и гостем.
+Cloud-образ при первой загрузке ищет `datasource` — источник данных о том, как себя настроить. Наш источник данных — ISO-образ из трёх файлов: `user-data` (как конфигурируем ОС: пользователи, права, SSH-ключи, правила обновления пакетов), `meta-data` (идентификация узла: instance-id, hostname) и `network-config` (конфигурация сетевого интерфейса, из которой cloud-init рендерит netplan). Собираем эти файлы в ISO утилитой `cloud-localds` и подключаем к ВМ вторым диском. `user-data` лежит в репозитории по пути [`configs/cloud-init/user-data.tmpl`](configs/cloud-init/user-data.tmpl) в виде шаблона, который ожидает подстановки публичного SSH-ключа для доступа к ВМ; `network-config` — по пути [`configs/cloud-init/network-config.tmpl`](configs/cloud-init/network-config.tmpl), он ожидает подстановки статического адреса узла и адреса DNS-сервера и применяется при развёртывании узлов парка (раздел 6). Golden image собираем без него: шаблон не должен нести адрес конкретного узла — на время сборки он получит адрес по DHCP. Из пакетов в `user-data` указан `qemu-guest-agent` — канал взаимодействия между гипервизором и гостем.
 
 **Поднимаем ВМ**
 
@@ -294,7 +294,10 @@ EOF
 sudo qemu-img resize /var/lib/libvirt/vmpool/noble-server-cloudimg-amd64.img 10G
 
 # Собираем seed-образ, который подключаем к ВМ как CD-ROM
-cloud-localds /tmp/seed.img /tmp/user-data /tmp/meta-data
+cloud-localds \
+    /tmp/seed.img \
+    /tmp/user-data  \
+    /tmp/meta-data
 ```
 
 Разворачиваем ВМ, импортируя готовый диск и указывая настройки:
@@ -409,29 +412,29 @@ Golden image готов.
 Скрипт развёртывания [`scripts/provision-node.sh`](scripts/provision-node.sh) запускается так:
 
 ```text
-./provision-node.sh <node_name> [-d disk_size] [-r ram] [-c vcpu]
+./provision-node.sh <node_name> --ip <IP_ADDRESS> [--disk SIZE] [--ram MB] [--vcpu COUNT] [--dns DNS_IP]
 ```
 
-Обязательный аргумент — имя узла; необязательные флаги задают параметры «железа». Что делает скрипт: проверяет переданные параметры и допустимость создания ВМ с ними (нет ли уже такого домена или диска, на месте ли шаблон и публичный ключ) → находит публичный SSH-ключ клиента → создаёт временный каталог, рендерит в него `user-data` и генерирует уникальный `meta-data`, собирает из них seed-образ для cloud-init → делает клон golden image и при необходимости меняет размер диска → финальным шагом передаёт параметры ВМ в `virt-install` и поднимает её.
+Обязательные аргументы — имя узла и его статический IP-адрес; необязательные флаги задают параметры «железа» и адрес DNS-сервера. Что делает скрипт: проверяет переданные параметры и допустимость создания ВМ с ними (нет ли уже такого домена или диска, на месте ли шаблон и публичный ключ, не занят ли адрес в сети) → находит публичный SSH-ключ клиента → создаёт временный каталог, рендерит в него `user-data` и `network-config` (подставляя статический адрес узла и адрес DNS-сервера), генерирует уникальный `meta-data` и собирает из них seed-образ для cloud-init → делает клон golden image и при необходимости меняет размер диска → финальным шагом передаёт параметры ВМ в `virt-install` и поднимает её.
 
 **Важно про передачу SSH-ключа скрипту**
 
 По умолчанию скрипт ищет публичный ключ клиента по пути `~/.ssh/client_mac_key.pub`. Путь можно переопределить переменной `SSH_KEY_PATH` при вызове:
 
 ```bash
-SSH_KEY_PATH=~/.ssh/my_key.pub scripts/provision-node.sh test-vm
+SSH_KEY_PATH=~/.ssh/my_key.pub scripts/provision-node.sh test-vm --ip 10.10.10.50
 ```
 
 **Пример развёртывания из golden image**
 
 ```bash
-scripts/provision-node.sh test-vm
+scripts/provision-node.sh test-vm --ip 10.10.10.50
 
 virsh list --all                         # видим test-vm в списке
-virsh domifaddr test-vm --source agent   # видим адрес интерфейса из DHCP-пула
+virsh domifaddr test-vm --source agent   # видим статический адрес, переданный скрипту
 
 # Подключаемся с клиента через ProxyJump — пускает по ключу, без пароля
-ssh devops@10.10.10.115                  # адрес из вывода virsh domifaddr
+ssh devops@10.10.10.50                   # адрес из вывода virsh domifaddr
 
 # Внутри ВМ
 cloud-init status   # done
