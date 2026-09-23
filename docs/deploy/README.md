@@ -32,6 +32,6 @@ cd infra_foundation
 | [2. Сеть парка](02-network.md) | изолированная сеть `labnet` 10.10.10.0/24 с NAT наружу |
 | [3. Golden image](03-golden-image.md) | обезличенный шаблон Ubuntu 24.04 с cloud-init |
 | [4. Развёртывание узла](04-node-provisioning.md) | узел парка из шаблона одной командой |
-| [5. Внутренний DNS](05-internal-dns.md) | зона `lab.internal` на dnsmasq узла mgmt |
+| [5. Парк и разрешение имён](05-internal-dns.md) | узлы web и app, зона `lab.internal` на dnsmasq и клиентская сторона |
 
 Как рабочая машина попадает на узлы парка и какие ключи в этом участвуют — [`docs/access-model.md`](../access-model.md).

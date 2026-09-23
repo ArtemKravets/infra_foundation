@@ -22,8 +22,8 @@
 - [x] Внутренняя сеть `labnet` (10.10.10.0/24) с NAT наружу поднята в libvirt
 - [x] Golden image Ubuntu 24.04 — обезличенный шаблон с cloud-init (пользователь, SSH-ключ, qemu-guest-agent)
 - [x] Новый узел парка поднимается из шаблона одной командой — [`scripts/provision-node.sh`](scripts/provision-node.sh)
-- [ ] Парк из 3+ ВМ в сегменте 10.10.10.0/24 со статической адресацией
-- [ ] Внутренний DNS: `dig app.lab.internal` резолвит узлы по именам
+- [x] Парк из 3+ ВМ в сегменте 10.10.10.0/24 со статической адресацией
+- [x] Внутренний DNS: `dig app.lab.internal` резолвит узлы по именам
 - [ ] Gitea на PostgreSQL, доступна по `https://gitea.lab.internal` через Nginx с TLS
 - [ ] Узлы прикрыты файрволом — открыты только нужные порты
 
@@ -71,7 +71,7 @@ flowchart TD
 | [2. Сеть парка](docs/deploy/02-network.md) | изолированная сеть `labnet` 10.10.10.0/24 с NAT наружу |
 | [3. Golden image](docs/deploy/03-golden-image.md) | обезличенный шаблон Ubuntu 24.04 с cloud-init |
 | [4. Развёртывание узла](docs/deploy/04-node-provisioning.md) | узел парка из шаблона одной командой |
-| [5. Внутренний DNS](docs/deploy/05-internal-dns.md) | зона `lab.internal` на dnsmasq узла mgmt |
+| [5. Парк и разрешение имён](docs/deploy/05-internal-dns.md) | узлы web и app, зона `lab.internal` на dnsmasq и клиентская сторона |
 
 ## Что ломалось и как чинил
 
