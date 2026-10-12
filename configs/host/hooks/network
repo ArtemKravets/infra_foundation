@@ -1,0 +1,22 @@
+#!/bin/bash
+
+NETWORK_NAME="$1"
+OPERATION="$2"
+
+if [[ "$NETWORK_NAME" = "labnet" && "$OPERATION" = "started" ]]; then
+    logger -t libvirt-network-hook "Triggered for $NETWORK_NAME, operation: $OPERATION. Configuring resolvectl for virbr-lab..."
+
+    # Configure the DNS server (mgmt) on the virbr-lab link.
+    # Add routing-only domains for the forward and reverse zones,
+    # and explicitly disable DefaultRoute for this link.
+    if resolvectl default-route virbr-lab false &&
+       resolvectl domain virbr-lab ~lab.internal ~10.10.10.in-addr.arpa &&
+       resolvectl dns virbr-lab 10.10.10.30; then
+        logger -t libvirt-network-hook "Successfully configured split DNS on virbr-lab."
+    else
+        logger -t libvirt-network-hook "ERROR: Failed to configure split DNS on virbr-lab! Rolling back..."
+	resolvectl revert virbr-lab
+    fi
+fi
+
+exit 0
