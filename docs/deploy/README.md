@@ -18,10 +18,12 @@ egrep -c '(vmx|svm)' /proc/cpuinfo   # результат > 0 — поддерж
 ## Склонировать репозиторий на узел-гипервизор
 
 ```bash
-cd ~
+mkdir -p ~/lab_projects && cd ~/lab_projects
 git clone https://github.com/ArtemKravets/infra_foundation.git
 cd infra_foundation
 ```
+
+Дальнейшие команды выполняются из этого каталога или ссылаются на него по пути `~/lab_projects/infra_foundation`.
 
 
 ## Порядок этапов
