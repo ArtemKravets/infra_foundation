@@ -242,7 +242,8 @@ sudo virt-install \
     --os-variant ubuntu24.04 \
     --import \
     --noautoconsole \
-    --channel unix,target_type=virtio,name=org.qemu.guest_agent.0
+    --channel unix,target_type=virtio,name=org.qemu.guest_agent.0 \
+    --autostart
 
 echo "=> Done! The '$NODE_NAME' node is running!"
 echo "Wait a minute for cloud-init to finish running, then check the IP: virsh domifaddr $NODE_NAME --source agent"

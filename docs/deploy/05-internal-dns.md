@@ -375,3 +375,28 @@ resolvectl query github.com               # ответ через LAN-интер
 ```bash
 ping -c1 app.lab.internal
 ```
+
+## Холодный старт парка
+
+Парк должен подниматься сам после перезагрузки гипервизора, в том числе аварийной: узлы для этого создаются с флагом автозапуска ([этап 4](04-node-provisioning.md)). Обычный ребут этого не доказывает — работавшие ВМ после чистого выключения хоста поднимает и служба `libvirt-guests`. Поэтому узлы гасим заранее: тогда `libvirt-guests` поднимать нечего, и вернуть их может только флаг.
+
+На гипервизоре:
+
+```bash
+virsh list --all --autostart                            # web, app, mgmt — с флагом автозапуска
+for vm in web app mgmt; do virsh shutdown "$vm"; done
+virsh list --all                                        # ждём shut off у всех: shutdown — лишь просьба гостю
+sudo reboot
+```
+
+После загрузки:
+
+```bash
+virsh list --all                                        # web, app, mgmt — running
+```
+
+С рабочей машины — вся цепочка разом: бастион, split DNS гипервизора, dnsmasq на `mgmt`, узел:
+
+```bash
+ssh web.lab.internal hostname                           # web
+```
