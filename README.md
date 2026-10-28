@@ -246,5 +246,6 @@ virsh domifaddr test-vm --source agent
 │   ├── cloud-init/            # шаблоны user-data и network-config для узлов парка
 │   └── dnsmasq/               # зона lab.internal на узле mgmt
 └── scripts/
-    └── provision-node.sh      # развёртывание узла парка из golden image
+    ├── provision-node.sh      # развёртывание узла парка из golden image
+    └── verify-park.sh         # проверка парка одной командой с рабочей машины
 ```
