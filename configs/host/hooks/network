@@ -6,17 +6,25 @@ OPERATION="$2"
 if [[ "$NETWORK_NAME" = "labnet" && "$OPERATION" = "started" ]]; then
     logger -t libvirt-network-hook "Triggered for $NETWORK_NAME, operation: $OPERATION. Configuring resolvectl for virbr-lab..."
 
+    # Explicitly disable DefaultRoute for this link.
+    # Add routing-only domains for the forward and reverse zones.
     # Configure the DNS server (mgmt) on the virbr-lab link.
-    # Add routing-only domains for the forward and reverse zones,
-    # and explicitly disable DefaultRoute for this link.
+
+    # Configuration order is critical: DefaultRoute -> domain -> dns.
+    # The DNS server is configured last to prevent a potential DNS loop.
+    # If the DNS server is set but disabling DefaultRoute fails, systemd-resolved
+    # will incorrectly route all non-zone queries to this interface.
     if resolvectl default-route virbr-lab false &&
        resolvectl domain virbr-lab ~lab.internal ~10.10.10.in-addr.arpa &&
        resolvectl dns virbr-lab 10.10.10.30; then
         logger -t libvirt-network-hook "Successfully configured split DNS on virbr-lab."
     else
         logger -t libvirt-network-hook "ERROR: Failed to configure split DNS on virbr-lab! Rolling back..."
-	resolvectl revert virbr-lab
+        resolvectl revert virbr-lab
     fi
 fi
 
+# Always exit 0. Libvirt treats a non-zero exit as a fatal error and destroys the network.
+# A resolvectl failure only breaks local host resolution for the zone, which is a 
+# acceptable graceful degradation compared to taking down the entire VM fleet.
 exit 0
