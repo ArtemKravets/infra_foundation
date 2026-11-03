@@ -35,6 +35,7 @@ cd infra_foundation
 | [3. Golden image](03-golden-image.md) | обезличенный шаблон Ubuntu 24.04 с cloud-init |
 | [4. Развёртывание узла](04-node-provisioning.md) | узел парка из шаблона одной командой |
 | [5. Парк и разрешение имён](05-internal-dns.md) | узлы mgmt, web и app, зона `lab.internal` на dnsmasq, клиентская сторона и холодный старт парка |
+| [6. Узел app](06-app-node.md) | отдельный диск данных: тома LVM под базу и репозитории |
 
 Как рабочая машина попадает на узлы парка и какие ключи в этом участвуют — [`docs/access-model.md`](../access-model.md).
 

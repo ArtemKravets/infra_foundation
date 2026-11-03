@@ -1,0 +1,6 @@
+<disk type='file' device='disk'>
+  <driver name='qemu' type='qcow2'/>
+  <source file='/var/lib/libvirt/vmpool/app-data.qcow2'/>
+  <target dev='vdb' bus='virtio'/>
+  <serial>app-data</serial>
+</disk>
