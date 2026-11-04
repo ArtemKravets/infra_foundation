@@ -149,3 +149,125 @@ lsblk -f /dev/vdb
 # Ожидаем: время загрузки — после настройки; vdb — LVM2_member,
 # тома vg_data-pgsql и vg_data-gitea с ext4 смонтированы на свои места
 ```
+
+## PostgreSQL
+
+Ставим PostgreSQL 16 из штатного репозитория Ubuntu. Том `pgsql` к этому моменту смонтирован в `/var/lib/postgresql`, поэтому кластер, который пакет создаёт при установке, сразу ложится на него.
+
+**Локаль — до установки.** Кодировку и локаль нового кластера `initdb` берёт из окружения, а SSH-клиент рабочей машины может передать на узел свои переменные локали (`LANG`, `LC_*`) — в том числе значения, которых на узле нет. Тогда пакет установится, но кластер не создастся или создастся не в UTF-8, а Gitea нужна база в UTF-8. Поэтому сначала:
+
+```bash
+locale
+# Ожидаем: валидные значения (в образе — C.UTF-8) и ни одного предупреждения Cannot set LC_...
+```
+
+**Установка:**
+
+```bash
+sudo apt update
+sudo apt install -y postgresql
+```
+
+Метапакет `postgresql` на Ubuntu 24.04 ставит версию 16. Пакет создаёт пользователя `postgres`, передаёт ему точку монтирования `/var/lib/postgresql` и создаёт кластер `16 main`. Обвязка Ubuntu (`postgresql-common`) раскладывает кластер так:
+
+* конфиги — `/etc/postgresql/16/main/` (`postgresql.conf`, `pg_hba.conf`);
+* данные — `/var/lib/postgresql/16/main/`, на томе;
+* журнал сервера — `/var/log/postgresql/postgresql-16-main.log`: отдельным файлом, а не в journald.
+
+Проверки:
+
+```bash
+pg_lsclusters
+# Ожидаем: 16 main 5432 online, каталог данных /var/lib/postgresql/16/main
+
+df -h /var/lib/postgresql/16/main
+# Ожидаем: /dev/mapper/vg_data-pgsql
+
+ls -ld /var/lib/postgresql /var/lib/postgresql/16/main
+# Ожидаем: владелец postgres, у каталога данных права 0700
+```
+
+**Два юнита.** `postgresql.service` — зонтичный: сам ничего не запускает и после старта стоит в `active (exited)`, даже если сервер лежит. Настоящий сервер — экземпляр `postgresql@16-main.service`. Поэтому состояние базы проверяем по экземпляру и `pg_lsclusters`, а не по зелёному статусу зонтика.
+
+```bash
+systemctl is-active postgresql postgresql@16-main
+# Ожидаем: active, active
+
+systemctl show -p RequiresMountsFor postgresql@16-main
+# Ожидаем: RequiresMountsFor=/etc/postgresql/16/main /var/lib/postgresql/16/main
+```
+
+Строка `RequiresMountsFor` замыкает схему с `nofail` из раздела «Монтирование»: юнит экземпляра получает `Requires=` и `After=` на монтирование тома. systemd смонтирует том до старта сервера и не запустит сервер, если монтирование не удалось: загрузка с `nofail` монтирования не ждёт, а сервер — ждёт.
+
+**Где слушает сервер.** По умолчанию — только loopback (`listen_addresses = 'localhost'`). База нужна одному локальному приложению, поэтому настройку не трогаем:
+
+```bash
+sudo ss -tlnp | grep 5432
+# Ожидаем: только 127.0.0.1:5432 — во внутреннюю сеть парка порт базы не смотрит
+```
+
+### Роль и база под Gitea
+
+Права — минимальные: роль `gitea` может входить, но она не суперпользователь и не создаёт базы и роли — скомпрометированное приложение не выйдет за пределы своей базы. Владелец базы — та же роль: начиная с PostgreSQL 15 создавать таблицы в схеме `public` может только владелец базы, и база, созданная без `OWNER`, на первом старте Gitea ответит `permission denied for schema public`.
+
+Пароль генерируем «скучный», из цифр и букв `a–f`: в `app.ini` Gitea символы `;` и `#` могут прочитаться как начало комментария, а в оболочке ломают команды `$` и кавычки.
+
+```bash
+openssl rand -hex 24
+```
+
+Роль и базу создаём от суперпользователя `postgres`. Ключ `-i` запускает psql в домашнем каталоге `postgres` — иначе psql предупредит, что не может перейти в каталог текущего пользователя:
+
+```bash
+sudo -i -u postgres psql
+```
+
+```sql
+CREATE ROLE gitea WITH LOGIN;
+\password gitea
+CREATE DATABASE gitea WITH OWNER gitea ENCODING 'UTF8';
+\q
+```
+
+Пароль задаём метакомандой `\password`, а не в SQL: psql превращает его в хэш SCRAM-SHA-256 на своей стороне, и открытый текст не попадает ни в историю psql, ни в журнал сервера.
+
+Проверки:
+
+```bash
+sudo -u postgres psql -c '\l'
+# Ожидаем: база gitea, владелец gitea, кодировка UTF8
+
+sudo -u postgres psql -c '\du'
+# Ожидаем: у роли gitea колонка Attributes пуста
+
+psql -h 127.0.0.1 -U gitea -d gitea -c 'SELECT current_user, current_database();'
+# Ожидаем: запрос пароля, затем gitea | gitea
+```
+
+### Вход в базу: кого и как пускает pg_hba.conf
+
+`pg_hba.conf` — список правил: тип подключения (`local` — через Unix-сокет, `host` — по TCP), база, роль, адрес и метод. Сервер применяет первое совпавшее правило сверху; не совпало ни одно — отказ. Штатный файл Ubuntu разрешает то, что нужно Gitea, без правок:
+
+* `host all all 127.0.0.1/32 scram-sha-256` — по TCP через loopback, с паролем. Так в базу будет ходить Gitea;
+* `local all all peer` — через сокет, если имя пользователя ОС совпадает с именем роли. Поэтому `sudo -u postgres psql` входит без пароля. Для Gitea этот путь не годится: служба работает от пользователя `git`, а роль — `gitea`.
+
+Метод входа для одной и той же роли зависит от того, как подключается клиент: `psql` без `-h` идёт в сокет. Так выглядит отказ:
+
+```bash
+psql -U gitea -d gitea
+# FATAL:  Peer authentication failed for user "gitea"
+```
+
+Какое правило сработало, не гадаем по файлу — сервер пишет это в свой журнал:
+
+```bash
+sudo tail -n 10 /var/log/postgresql/postgresql-16-main.log
+```
+
+```text
+LOG:  provided user name (gitea) and authenticated user name (devops) do not match
+FATAL:  Peer authentication failed for user "gitea"
+DETAIL:  Connection matched file "/etc/postgresql/16/main/pg_hba.conf" line 123: "local   all             all                                     peer"
+```
+
+Строка `DETAIL` с номером правила — первое, что стоит посмотреть, когда приложение «не пускают в базу».
